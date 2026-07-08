@@ -57,6 +57,42 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Workspace directories setup
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(WORKSPACE_DIR, "data", "images")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def get_absolute_image_path(path):
+    if not path:
+        return None
+    if os.path.isabs(path):
+        return path
+    return os.path.join(WORKSPACE_DIR, path)
+
+def save_uploaded_file(uploaded_file, restaurant_id):
+    """Saves uploaded file to UPLOAD_DIR and returns the relative path."""
+    if uploaded_file is None:
+        return None
+    _, ext = os.path.splitext(uploaded_file.name)
+    if not ext:
+        ext = ".png"
+    filename = f"{restaurant_id}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return f"data/images/{filename}"
+
+def load_preview_image(image_path_or_url):
+    """Checks if the path is a URL or a valid local file and returns it for display."""
+    if not image_path_or_url:
+        return None
+    if image_path_or_url.startswith("http://") or image_path_or_url.startswith("https://"):
+        return image_path_or_url
+    abs_path = get_absolute_image_path(image_path_or_url)
+    if abs_path and os.path.exists(abs_path):
+        return abs_path
+    return None
+
 # Helper functions for export
 def convert_to_export_format(restaurants):
     """Converts SQLite integer booleans and other fields to final schema format."""
@@ -220,6 +256,7 @@ with tab_pending:
                     
                 address_val = st.text_input("Address", value=selected_rest["address"] or "")
                 cover_val = st.text_input("Cover Image URL", value=selected_rest["cover_image_url"] or "")
+                uploaded_file = st.file_uploader("Or Upload Cover Image File", type=["png", "jpg", "jpeg", "webp"])
                 
                 # Promotion Settings
                 col_prom, col_prom_date = st.columns(2)
@@ -249,6 +286,10 @@ with tab_pending:
                     elif not (-90 <= lat_val <= 90) or not (-180 <= lng_val <= 180):
                         st.error("Error: Invalid coordinate bounds. Latitude must be -90 to 90, Longitude -180 to 180.")
                     else:
+                        if uploaded_file is not None:
+                            saved_path = save_uploaded_file(uploaded_file, rest_id)
+                            cover_val = saved_path
+                            
                         updated_data = {
                             "name": name_val,
                             "description": description_val if description_val.strip() else None,
@@ -291,8 +332,14 @@ with tab_pending:
                 st.error(f"Could not load map: {e}")
                 
             st.markdown("### 🖼️ Cover Image Preview")
-            if cover_val and cover_val.startswith("http"):
-                st.image(cover_val, caption=name_val, use_container_width=True)
+            if uploaded_file is not None:
+                st.image(uploaded_file, caption="Preview of uploaded image", use_container_width=True)
+            elif cover_val:
+                preview_img = load_preview_image(cover_val)
+                if preview_img:
+                    st.image(preview_img, caption=name_val, use_container_width=True)
+                else:
+                    st.warning("Cover image path/URL specified but file not found or invalid URL.")
             else:
                 st.info("No cover image URL or preview available.")
 
@@ -315,14 +362,104 @@ with tab_approved:
         ]]
         st.dataframe(df_display, use_container_width=True)
         
-        # Action to send back to pending or edit
-        selected_approved_name = st.selectbox("Select Restaurant to Re-evaluate", [r["name"] for r in approved_list])
+        # Select approved restaurant to edit
+        selected_approved_name = st.selectbox("Select Restaurant to Edit/Re-evaluate", [r["name"] for r in approved_list])
         selected_approved = next(r for r in approved_list if r["name"] == selected_approved_name)
         
-        if st.button("Move selected back to Pending"):
-            database.update_restaurant_status(conn, selected_approved["id"], "pending")
-            st.info(f"Moved '{selected_approved_name}' back to Pending.")
-            st.rerun()
+        st.subheader(f"✏️ Edit Approved Restaurant: {selected_approved['name']}")
+        col_app_form, col_app_preview = st.columns([3, 2])
+        
+        with col_app_form:
+            with st.form("approved_edit_form", clear_on_submit=False):
+                # Edit fields
+                app_name_val = st.text_input("Name (Required)", value=selected_approved["name"])
+                app_description_val = st.text_area("Description", value=selected_approved["description"] or "")
+                app_cuisine_val = st.text_input("Cuisine Type", value=selected_approved["cuisine_type"] or "")
+                app_price_val = st.number_input("Price Level (1-4)", min_value=1, max_value=4, value=selected_approved["price_level"] or 2, step=1)
+                
+                # Coordinates
+                col_app_lat, col_app_lng = st.columns(2)
+                with col_app_lat:
+                    app_lat_val = st.number_input("Latitude", value=float(selected_approved["lat"]), format="%.6f", key="app_lat")
+                with col_app_lng:
+                    app_lng_val = st.number_input("Longitude", value=float(selected_approved["lng"]), format="%.6f", key="app_lng")
+                    
+                app_address_val = st.text_input("Address", value=selected_approved["address"] or "")
+                app_cover_val = st.text_input("Cover Image URL", value=selected_approved["cover_image_url"] or "", key="app_cover")
+                app_uploaded_file = st.file_uploader("Or Upload Cover Image File", type=["png", "jpg", "jpeg", "webp"], key="app_upload")
+                
+                # Promotion Settings
+                col_app_prom, col_app_prom_date = st.columns(2)
+                with col_app_prom:
+                    app_is_promoted_val = st.checkbox("Is Promoted", value=bool(selected_approved["is_promoted"]), key="app_is_prom")
+                with col_app_prom_date:
+                    app_prom_end_val = st.text_input("Promotion End Date (ISO 8601 or empty)", value=selected_approved["promotion_end_at"] or "", key="app_prom_date")
+                
+                # Action Buttons
+                col_app_btn1, col_app_btn2 = st.columns(2)
+                with col_app_btn1:
+                    save_app_changes = st.form_submit_button("💾 Save Changes", type="primary")
+                with col_app_btn2:
+                    move_back = st.form_submit_button("📥 Move back to Pending")
+                    
+                if save_app_changes or move_back:
+                    if not app_name_val.strip():
+                        st.error("Error: Restaurant Name is required.")
+                    elif not (-90 <= app_lat_val <= 90) or not (-180 <= app_lng_val <= 180):
+                        st.error("Error: Invalid coordinate bounds.")
+                    else:
+                        app_rest_id = selected_approved["id"]
+                        if app_uploaded_file is not None:
+                            saved_path = save_uploaded_file(app_uploaded_file, app_rest_id)
+                            app_cover_val = saved_path
+                            
+                        updated_data = {
+                            "name": app_name_val,
+                            "description": app_description_val if app_description_val.strip() else None,
+                            "cuisine_type": app_cuisine_val if app_cuisine_val.strip() else None,
+                            "price_level": app_price_val,
+                            "lat": app_lat_val,
+                            "lng": app_lng_val,
+                            "address": app_address_val if app_address_val.strip() else None,
+                            "cover_image_url": app_cover_val if app_cover_val.strip() else None,
+                            "is_promoted": 1 if app_is_promoted_val else 0,
+                            "promotion_end_at": app_prom_end_val if app_prom_end_val.strip() else None
+                        }
+                        
+                        if save_app_changes:
+                            database.update_restaurant_status(conn, app_rest_id, "valid", updated_data)
+                            st.success(f"Saved changes for approved restaurant '{app_name_val}'!")
+                            st.rerun()
+                        elif move_back:
+                            database.update_restaurant_status(conn, app_rest_id, "pending", updated_data)
+                            st.info(f"Moved '{app_name_val}' back to Pending with updated details.")
+                            st.rerun()
+        
+        with col_app_preview:
+            st.markdown("### 🗺️ Location Preview")
+            try:
+                m_app = folium.Map(location=[app_lat_val, app_lng_val], zoom_start=16)
+                folium.Marker(
+                    [app_lat_val, app_lng_val], 
+                    popup=app_name_val, 
+                    tooltip=app_name_val,
+                    icon=folium.Icon(color='green', icon='cutlery', prefix='fa')
+                ).add_to(m_app)
+                st_folium(m_app, height=300, key="approved_map", use_container_width=True)
+            except Exception as e:
+                st.error(f"Could not load map: {e}")
+                
+            st.markdown("### 🖼️ Cover Image Preview")
+            if app_uploaded_file is not None:
+                st.image(app_uploaded_file, caption="Preview of uploaded image", use_container_width=True)
+            elif app_cover_val:
+                preview_img_app = load_preview_image(app_cover_val)
+                if preview_img_app:
+                    st.image(preview_img_app, caption=app_name_val, use_container_width=True)
+                else:
+                    st.warning("Cover image path/URL specified but file not found or invalid URL.")
+            else:
+                st.info("No cover image URL or preview available.")
             
         st.divider()
         
