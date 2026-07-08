@@ -237,8 +237,8 @@ with tab_pending:
         current_id = selected_rest["id"]
         if "pending_rest_id" not in st.session_state or st.session_state.pending_rest_id != current_id:
             st.session_state.pending_rest_id = current_id
-            st.session_state.pending_lat_input = float(selected_rest["lat"])
-            st.session_state.pending_lng_input = float(selected_rest["lng"])
+            st.session_state.pending_lat = float(selected_rest["lat"])
+            st.session_state.pending_lng = float(selected_rest["lng"])
             
         # Details Form
         st.subheader(f"Reviewing: {selected_rest['name']}")
@@ -257,9 +257,9 @@ with tab_pending:
                 # Coordinates
                 col_lat, col_lng = st.columns(2)
                 with col_lat:
-                    lat_val = st.number_input("Latitude", key="pending_lat_input", format="%.6f")
+                    lat_val = st.number_input("Latitude", value=st.session_state.pending_lat, format="%.6f")
                 with col_lng:
-                    lng_val = st.number_input("Longitude", key="pending_lng_input", format="%.6f")
+                    lng_val = st.number_input("Longitude", value=st.session_state.pending_lng, format="%.6f")
                     
                 address_val = st.text_input("Address", value=selected_rest["address"] or "")
                 cover_val = st.text_input("Cover Image URL", value=selected_rest["cover_image_url"] or "")
@@ -327,9 +327,9 @@ with tab_pending:
             st.markdown("### 🗺️ Location Preview")
             try:
                 # Render interactive Folium Map using session state values
-                m = folium.Map(location=[st.session_state.pending_lat_input, st.session_state.pending_lng_input], zoom_start=16)
+                m = folium.Map(location=[st.session_state.pending_lat, st.session_state.pending_lng], zoom_start=16)
                 folium.Marker(
-                    [st.session_state.pending_lat_input, st.session_state.pending_lng_input], 
+                    [st.session_state.pending_lat, st.session_state.pending_lng], 
                     popup=name_val, 
                     tooltip=name_val,
                     icon=folium.Icon(color='red', icon='cutlery', prefix='fa')
@@ -340,9 +340,9 @@ with tab_pending:
                 if map_data and map_data.get("last_clicked"):
                     clicked_lat = map_data["last_clicked"]["lat"]
                     clicked_lng = map_data["last_clicked"]["lng"]
-                    if clicked_lat != st.session_state.pending_lat_input or clicked_lng != st.session_state.pending_lng_input:
-                        st.session_state.pending_lat_input = clicked_lat
-                        st.session_state.pending_lng_input = clicked_lng
+                    if clicked_lat != st.session_state.pending_lat or clicked_lng != st.session_state.pending_lng:
+                        st.session_state.pending_lat = clicked_lat
+                        st.session_state.pending_lng = clicked_lng
                         st.rerun()
             except Exception as e:
                 st.error(f"Could not load map: {e}")
@@ -386,8 +386,8 @@ with tab_approved:
         app_current_id = selected_approved["id"]
         if "approved_rest_id" not in st.session_state or st.session_state.approved_rest_id != app_current_id:
             st.session_state.approved_rest_id = app_current_id
-            st.session_state.approved_lat_input = float(selected_approved["lat"])
-            st.session_state.approved_lng_input = float(selected_approved["lng"])
+            st.session_state.approved_lat = float(selected_approved["lat"])
+            st.session_state.approved_lng = float(selected_approved["lng"])
             
         st.subheader(f"✏️ Edit Approved Restaurant: {selected_approved['name']}")
         col_app_form, col_app_preview = st.columns([3, 2])
@@ -403,9 +403,9 @@ with tab_approved:
                 # Coordinates
                 col_app_lat, col_app_lng = st.columns(2)
                 with col_app_lat:
-                    app_lat_val = st.number_input("Latitude", key="approved_lat_input", format="%.6f")
+                    app_lat_val = st.number_input("Latitude", value=st.session_state.approved_lat, format="%.6f")
                 with col_app_lng:
-                    app_lng_val = st.number_input("Longitude", key="approved_lng_input", format="%.6f")
+                    app_lng_val = st.number_input("Longitude", value=st.session_state.approved_lng, format="%.6f")
                     
                 app_address_val = st.text_input("Address", value=selected_approved["address"] or "")
                 app_cover_val = st.text_input("Cover Image URL", value=selected_approved["cover_image_url"] or "", key="app_cover")
@@ -461,9 +461,9 @@ with tab_approved:
         with col_app_preview:
             st.markdown("### 🗺️ Location Preview")
             try:
-                m_app = folium.Map(location=[st.session_state.approved_lat_input, st.session_state.approved_lng_input], zoom_start=16)
+                m_app = folium.Map(location=[st.session_state.approved_lat, st.session_state.approved_lng], zoom_start=16)
                 folium.Marker(
-                    [st.session_state.approved_lat_input, st.session_state.approved_lng_input], 
+                    [st.session_state.approved_lat, st.session_state.approved_lng], 
                     popup=app_name_val, 
                     tooltip=app_name_val,
                     icon=folium.Icon(color='green', icon='cutlery', prefix='fa')
@@ -474,9 +474,9 @@ with tab_approved:
                 if map_data_app and map_data_app.get("last_clicked"):
                     clicked_lat_app = map_data_app["last_clicked"]["lat"]
                     clicked_lng_app = map_data_app["last_clicked"]["lng"]
-                    if clicked_lat_app != st.session_state.approved_lat_input or clicked_lng_app != st.session_state.approved_lng_input:
-                        st.session_state.approved_lat_input = clicked_lat_app
-                        st.session_state.approved_lng_input = clicked_lng_app
+                    if clicked_lat_app != st.session_state.approved_lat or clicked_lng_app != st.session_state.approved_lng:
+                        st.session_state.approved_lat = clicked_lat_app
+                        st.session_state.approved_lng = clicked_lng_app
                         st.rerun()
             except Exception as e:
                 st.error(f"Could not load map: {e}")
